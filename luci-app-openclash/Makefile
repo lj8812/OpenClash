@@ -59,10 +59,23 @@ define Build/Prepare
 	sed -i "s/v0.00.00/v$(PKG_VERSION)/g" $(PKG_BUILD_DIR)/root/www/luci-static/resources/openclash/img/version.svg >/dev/null 2>&1
 	chmod 0755 $(PKG_BUILD_DIR)/root/etc/init.d/openclash
 	chmod -R 0755 $(PKG_BUILD_DIR)/root/usr/share/openclash/
+	
+	# 预置内核（x86_64）
+	mkdir -p $(PKG_BUILD_DIR)/root/etc/openclash/core
+	cd $(PKG_BUILD_DIR)/root/etc/openclash/core && \
+		curl -L https://github.com/vernesong/OpenClash/releases/download/Clash/clash-linux-amd64.tar.gz -o clash.tar.gz && \
+		tar -zxvf clash.tar.gz && \
+		rm -f clash.tar.gz
+	chmod 0755 $(PKG_BUILD_DIR)/root/etc/openclash/core/clash
+	
+	# 配置自动更新禁用
+	sed -i 's/option auto_update .*/option auto_update "0"/g' $(PKG_BUILD_DIR)/root/etc/config/openclash
+	sed -i 's/option release_branch .*/option release_branch "disabled"/g' $(PKG_BUILD_DIR)/root/etc/config/openclash
+	
+	# 原有目录和备份操作
 	mkdir -p $(PKG_BUILD_DIR)/root/etc/openclash/config
 	mkdir -p $(PKG_BUILD_DIR)/root/etc/openclash/rule_provider
 	mkdir -p $(PKG_BUILD_DIR)/root/etc/openclash/backup
-	mkdir -p $(PKG_BUILD_DIR)/root/etc/openclash/core
 	mkdir -p $(PKG_BUILD_DIR)/root/usr/share/openclash/backup
 	cp -f "$(PKG_BUILD_DIR)/root/etc/config/openclash" "$(PKG_BUILD_DIR)/root/usr/share/openclash/backup/openclash" >/dev/null 2>&1
 	cp -f "$(PKG_BUILD_DIR)/root/etc/openclash/custom/openclash_custom_rules.list" "$(PKG_BUILD_DIR)/root/usr/share/openclash/backup/openclash_custom_rules.list" >/dev/null 2>&1
@@ -105,6 +118,7 @@ endef
 define Package/$(PKG_NAME)/postinst
 #!/bin/sh
 	sed -i "s/v0.00.00/v$(PKG_VERSION)/g" /www/luci-static/resources/openclash/img/version.svg >/dev/null 2>&1
+	chmod 0755 /etc/openclash/core/clash  # 确保权限
 	exit 0
 endef
 
@@ -148,8 +162,8 @@ define Package/$(PKG_NAME)/postrm
 	rm -rf /tmp/etc/openclash >/dev/null 2>&1
 	rm -rf /tmp/openclash_edit_file_name >/dev/null 2>&1
 	sed -i '/OpenClash Append/,/OpenClash Append End/d' "/usr/lib/lua/luci/model/network.lua" >/dev/null 2>&1
-	sed -i '/.*kB maximum content size*/c\HTTP_MAX_CONTENT      = 1024*100		-- 100 kB maximum content size' /usr/lib/lua/luci/http.lua >/dev/null 2>&1
-	sed -i '/.*kB maximum content size*/c\export let HTTP_MAX_CONTENT = 1024*100;		// 100 kB maximum content size' /usr/share/ucode/luci/http.uc >/dev/null 2>&1
+	sed -i '/.*kB maximum content size*/c\HTTP_MAX_CONTENT      = 1024 * 100		-- 100 kB maximum content size' /usr/lib/lua/luci/http.lua >/dev/null 2>&1
+	sed -i '/.*kB maximum content size*/c\export let HTTP_MAX_CONTENT = 1024 * 100;		// 100 kB maximum content size' /usr/share/ucode/luci/http.uc >/dev/null 2>&1
 	uci -q delete firewall.openclash
 	uci -q commit firewall
 	[ -f "/etc/config/ucitrack" ] && {
