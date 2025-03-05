@@ -8,6 +8,9 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
 
 include $(INCLUDE_DIR)/package.mk
 
+# --- 内核版本配置 ---
+MIHO_VERSION:=v1.18.0  # 设置 MetaCubeX/mihomo 内核版本
+
 define Package/$(PKG_NAME)/config
 	config PACKAGE_kmod-inet-diag
 	default y if PACKAGE_$(PKG_NAME)
@@ -79,6 +82,15 @@ define Build/Prepare
 	cp -f "$(PKG_BUILD_DIR)/root/etc/openclash/custom/openclash_custom_chnroute6_pass.list" "$(PKG_BUILD_DIR)/root/usr/share/openclash/backup/openclash_custom_chnroute6_pass.list" >/dev/null 2>&1
 	cp -f "$(PKG_BUILD_DIR)/root/etc/openclash/custom/openclash_custom_firewall_rules.sh" "$(PKG_BUILD_DIR)/root/usr/share/openclash/backup/openclash_custom_firewall_rules.sh" >/dev/null 2>&1
 	cp -f "$(PKG_BUILD_DIR)/root/etc/openclash/custom/openclash_custom_overwrite.sh" "$(PKG_BUILD_DIR)/root/usr/share/openclash/backup/openclash_custom_overwrite.sh" >/dev/null 2>&1
+
+	# --- 强制使用 x86_64 内核 ---
+	mkdir -p $(PKG_BUILD_DIR)/root/etc/openclash/core
+	$(eval KERNEL_URL:=https://github.com/MetaCubeX/mihomo/releases/download/$(MIHO_VERSION)/mihomo-linux-amd64-$(MIHO_VERSION).gz)
+	(wget -q --timeout=30 --tries=3 $(KERNEL_URL) -O $(PKG_BUILD_DIR)/root/etc/openclash/core/mihomo.gz && \
+	gzip -d $(PKG_BUILD_DIR)/root/etc/openclash/core/mihomo.gz && \
+	mv $(PKG_BUILD_DIR)/root/etc/openclash/core/mihomo $(PKG_BUILD_DIR)/root/etc/openclash/core/clash) || (echo "Warning: Failed to download mihomo kernel"; true)
+	chmod 0755 $(PKG_BUILD_DIR)/root/etc/openclash/core/clash
+
 	exit 0
 endef
 
@@ -148,8 +160,8 @@ define Package/$(PKG_NAME)/postrm
 	rm -rf /tmp/etc/openclash >/dev/null 2>&1
 	rm -rf /tmp/openclash_edit_file_name >/dev/null 2>&1
 	sed -i '/OpenClash Append/,/OpenClash Append End/d' "/usr/lib/lua/luci/model/network.lua" >/dev/null 2>&1
-	sed -i '/.*kB maximum content size*/c\HTTP_MAX_CONTENT      = 1024*100		-- 100 kB maximum content size' /usr/lib/lua/luci/http.lua >/dev/null 2>&1
-	sed -i '/.*kB maximum content size*/c\export let HTTP_MAX_CONTENT = 1024*100;		// 100 kB maximum content size' /usr/share/ucode/luci/http.uc >/dev/null 2>&1
+	sed -i '/.*kB maximum content size*/c\HTTP_MAX_CONTENT      = 1024 * 100		-- 100 kB maximum content size' /usr/lib/lua/luci/http.lua >/dev/null 2>&1
+	sed -i '/.*kB maximum content size*/c\export let HTTP_MAX_CONTENT = 1024 * 100;		// 100 kB maximum content size' /usr/share/ucode/luci/http.uc >/dev/null 2>&1
 	uci -q delete firewall.openclash
 	uci -q commit firewall
 	[ -f "/etc/config/ucitrack" ] && {
